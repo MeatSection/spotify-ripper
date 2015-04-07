@@ -383,6 +383,7 @@ class Ripper(threading.Thread):
               "-d", str(track.disc),
               "-D", str(num_discs),
               "-Y", str(track.album.year),
+              "--release-year", str(track.album.year),
               "-Q",
               self.mp3_file
         ])
