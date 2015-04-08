@@ -43,6 +43,7 @@ class Utils():
         part = re.sub(r"(^\.+\s*|(?<=\.)\.+|\s*\.+$)", r'', part)
         return part
 
+
 class Ripper(threading.Thread):
 
     logger = logging.getLogger('shell.ripper')
@@ -122,7 +123,7 @@ class Ripper(threading.Thread):
                     print(Fore.YELLOW + "Skipping " + track.link.uri + Fore.RESET)
                     print(Fore.CYAN + self.mp3_file + Fore.RESET)
                     continue
-
+		
                 self.session.player.load(track)
                 self.prepare_rip(track)
                 self.duration = track.duration
@@ -290,18 +291,25 @@ class Ripper(threading.Thread):
         base_dir = Utils.norm_path(args.directory[0]) if args.directory != None else os.getcwd()
 
         artist = Utils.escape_filename_part(track.artists[0].name).encode('ascii', 'ignore')
+	artists = " / ".join([a.name for a in track.artists])
         album = Utils.escape_filename_part(track.album.name).encode('ascii', 'ignore')
         track_name = Utils.escape_filename_part(track.name).encode('ascii', 'ignore')
-        track_number = Utils.escape_filename_part(track.track_number).encode('ascii', 'ignore')
-        if track.album.album_type == 'compilation':
-            compilation = True
-        if args.flat:
+        track_number = Utils.escape_filename_part(str(track.index).zfill(2)).encode('ascii', 'ignore')
+
+        album_artist = track.album.artist.name
+        album_type = track.album.type
+        if album_type == 2 or album_artist == 'Various Artists':
+                compilation = True
+        else:
+		compilation = False    
+        
+	if args.flat:
             self.mp3_file = os.path.join(base_dir, artist + " - " + track_name + ".mp3").encode('ascii', 'ignore')
         elif args.Flat:
             filled_idx = str(idx).zfill(self.idx_digits)
             self.mp3_file = os.path.join(base_dir, filled_idx + " - " + artist + " - " + track_name + ".mp3").encode('ascii', 'ignore')
-        elif args.flat_compilations and track.album.album_type == 'compilation':
-            self.mp3_file = os.path.join(base_dir, album, track_number + " - " + track_name + "("+ artist +")" + ".mp3").encode('ascii', 'ignore')
+        elif args.flat_compilations and compilation == True:
+            self.mp3_file = os.path.join(base_dir, album, track_number + " - " + track_name + " ("+ artists +")" + ".mp3").encode('ascii', 'ignore')
         else:
             self.mp3_file = os.path.join(base_dir, artist, album, artist + " - " + track_name + ".mp3").encode('ascii', 'ignore')
 
@@ -377,23 +385,32 @@ class Ripper(threading.Thread):
         fh_cover.write(image.data)
         fh_cover.close()
 
-#TODO: Reworking Album & Track Artists more uniformly.
+#Reworking Album & Track Artists more uniformly.
 
-        if track.album.album_type == 'compilation':
+        artists = " / ".join([a.name for a in track.artists])
+        album_artist = track.album.artist.name
+        album_type = track.album.type
+        if album_type == 2 or album_artist == 'Various Artists':
+                compilation = True
+        else:
+                compilation = False
+
+
+        if compilation == True:
             # write id3 data
             call(["eyeD3",
                 "--add-image", "cover.jpg:FRONT_COVER",
                 "-t", track.name,
-                "-a", track.artists[0].name,
+                "-a", artists,
                 "-A", track.album.name,
                 "-n", str(track.index),
                 "-N", str(num_tracks),
                 "-d", str(track.disc),
                 "-D", str(num_discs),
                 "-Y", str(track.album.year),
-                "--recording-year", str(track.album.year),
-                "--set-text-frame=", "TCMP:1",
-                "-b", "Various Artists",
+                "--recording-date", str(track.album.year),
+                "--text-frame", "TCMP:1",
+                "-b", album_artist,
                 "-Q",
                 self.mp3_file
             ])
@@ -402,14 +419,15 @@ class Ripper(threading.Thread):
             call(["eyeD3",
                 "--add-image", "cover.jpg:FRONT_COVER",
                 "-t", track.name,
-                "-a", track.artists[0].name,
-                "-A", track.album.name,
+                "-a", artists,
+		"-b", album_artist,
+		"-A", track.album.name,
                 "-n", str(track.index),
                 "-N", str(num_tracks),
                 "-d", str(track.disc),
                 "-D", str(num_discs),
                 "-Y", str(track.album.year),
-                "--recording-year", str(track.album.year),
+                "--recording-date", str(track.album.year),
                 "-Q",
                 self.mp3_file
             ])
@@ -463,4 +481,3 @@ if __name__ == '__main__':
         print("\n" + Fore.RED + "Aborting..." + Fore.RESET)
         ripper.abort()
         sys.exit(1)
-
