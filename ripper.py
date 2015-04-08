@@ -292,13 +292,16 @@ class Ripper(threading.Thread):
         artist = Utils.escape_filename_part(track.artists[0].name).encode('ascii', 'ignore')
         album = Utils.escape_filename_part(track.album.name).encode('ascii', 'ignore')
         track_name = Utils.escape_filename_part(track.name).encode('ascii', 'ignore')
-        track_number = Utils.escape_filename_part(track.index).encode('ascii', 'ignore')
-        year = Utils.escape_filename_part(track.album.year).encode('ascii', 'ignore')
+        track_number = Utils.escape_filename_part(track.track_number).encode('ascii', 'ignore')
+        if track.album.album_type == 'compilation':
+            compilation = True
         if args.flat:
             self.mp3_file = os.path.join(base_dir, artist + " - " + track_name + ".mp3").encode('ascii', 'ignore')
         elif args.Flat:
             filled_idx = str(idx).zfill(self.idx_digits)
             self.mp3_file = os.path.join(base_dir, filled_idx + " - " + artist + " - " + track_name + ".mp3").encode('ascii', 'ignore')
+        elif args.flat_compilations and track.album.album_type == 'compilation':
+            self.mp3_file = os.path.join(base_dir, album, track_number + " - " + track_name + "("+ artist +")" + ".mp3").encode('ascii', 'ignore')
         else:
             self.mp3_file = os.path.join(base_dir, artist, album, artist + " - " + track_name + ".mp3").encode('ascii', 'ignore')
 
@@ -370,44 +373,48 @@ class Ripper(threading.Thread):
         image = track.album.cover()
         image.load()
 
-        # check for compilation type
-        compilation = False
-        if track.album.album_type == 'compilation'
-            compilation = True 
-            album_artist = 'Various Artists'
-        else
-            album_artist = track.artists[0].name
-            
-        #other little artist handling stuff
-        track_artist = track.artists[0].name
-        for track_artists in track.artists:
-                track_artist =+ ", " + track_artists.name
-            
-            # TODO: write code...
-
         fh_cover = open('cover.jpg','wb')
         fh_cover.write(image.data)
         fh_cover.close()
 
-        # write id3 data
-        call(["eyeD3",
-              "--add-image", "cover.jpg:FRONT_COVER",
-              "-t", track.name,
-              "-a", track.artists[0].name,
-              "-A", track.album.name,
-              "-b", album_artist,
-              "-n", str(track.index),
-              "-N", str(num_tracks),
-              "-d", str(track.disc),
-              "-D", str(num_discs),
-              "-Y", str(track.album.year),
-              "--recording-year", str(track.album.year),
-              "--set-text-frame=", "TCMP:1",
-              "-Q",
-              self.mp3_file
-        ])
+#TODO: Reworking Album & Track Artists more uniformly.
 
-        # delete cover > Improvement, when last track of album dont delete cover.jpg
+        if track.album.album_type == 'compilation':
+            # write id3 data
+            call(["eyeD3",
+                "--add-image", "cover.jpg:FRONT_COVER",
+                "-t", track.name,
+                "-a", track.artists[0].name,
+                "-A", track.album.name,
+                "-n", str(track.index),
+                "-N", str(num_tracks),
+                "-d", str(track.disc),
+                "-D", str(num_discs),
+                "-Y", str(track.album.year),
+                "--recording-year", str(track.album.year),
+                "--set-text-frame=", "TCMP:1",
+                "-b", "Various Artists",
+                "-Q",
+                self.mp3_file
+            ])
+        else:
+            # write id3 data
+            call(["eyeD3",
+                "--add-image", "cover.jpg:FRONT_COVER",
+                "-t", track.name,
+                "-a", track.artists[0].name,
+                "-A", track.album.name,
+                "-n", str(track.index),
+                "-N", str(num_tracks),
+                "-d", str(track.disc),
+                "-D", str(num_discs),
+                "-Y", str(track.album.year),
+                "--recording-year", str(track.album.year),
+                "-Q",
+                self.mp3_file
+            ])
+
+        # delete cover
         call(["rm", "-f", "cover.jpg"])
 
 
@@ -429,8 +436,7 @@ if __name__ == '__main__':
     parser.add_argument('-d', '--directory', nargs=1, help='Base directory where ripped MP3s are saved [Default=cwd]')
     parser.add_argument('-f', '--flat', action='store_true', help='Save all songs to a single directory instead of organizing by album/artist/song')
     parser.add_argument('-F', '--Flat', action='store_true', help='Similar to --flat [-f] but includes the playlist index at the start of the song file')
-    parser.add_argument('-np', '--name-pattern ', action='store_true', help='Set namepattern for filenames [Default=artist, album, artist + " - " + track_name]') #skipping function needs also to be patched or otherwise duplicates will appear
-    parser.add_argument('-fc', '--flat-compilations ', action='store_true', help='Use different pattern for compilations [Default=no]')
+    parser.add_argument('-fc', '--flat-compilations', action='store_true', help='Similar to --flat [-f], but only used for compilations')
     group.add_argument('-u', '--user', nargs=1, help='Spotify username')
     parser.add_argument('-p', '--password', nargs=1, help='Spotify password [Default=ask interactively]')
     group.add_argument('-l', '--last', action='store_true', help='Use last login credentials')
@@ -439,8 +445,6 @@ if __name__ == '__main__':
     parser.add_argument('-s', '--strip-colors', action='store_true', help='Strip coloring from output[Default=colors]')
     parser.add_argument('-v', '--vbr', default='0', help='Lame VBR encoding quality setting [Default=0]')
     parser.add_argument('-r', '--remove-from-playlist', action='store_true', help='Delete tracks from playlist after successful ripping [Default=no]')
-    parser.add_argument('-R', '--remove-from-playlist-immediatly', action='store_true', help='Delete tracks from playlist after successful ripping individual tracks [Default=no]')
-    parser.add_argument('-enc', '--encoding', default='ascii', choices=['ascii', 'utf8'], help='Set Filename encoding [Default=ascii]')
     parser.add_argument('uri', help='Spotify URI (either URI, a file of URIs or a search query)')
     args = parser.parse_args()
 
@@ -459,5 +463,4 @@ if __name__ == '__main__':
         print("\n" + Fore.RED + "Aborting..." + Fore.RESET)
         ripper.abort()
         sys.exit(1)
-
 
